@@ -1389,15 +1389,6 @@ async function abrirScanner(modo) {
       document.getElementById('scanner-msg').textContent = '🔍 A confirmar leitura...';
     }
   });
-
-    // Feedback visual
-    document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
-
-    setTimeout(() => {
-      fecharScanner();
-      onScanSuccess(codigo);
-    }, 400);
-  });
 }
 
 function fecharScanner() {
