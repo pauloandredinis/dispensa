@@ -1439,14 +1439,120 @@ async function onScanSuccess(codigo) {
       mostrarToast('✅ ' + resultado.produto.nome, 'success');
     }
   } else {
+    // Produto não está na dispensa — pesquisa no Open Food Facts
     if (modo === 'novo-produto') {
       document.getElementById('np-barras').value = codigo;
-      mostrarToast('Código registado: ' + codigo, 'success');
-    } else if (confirm('Produto não encontrado. Criar agora?')) {
+      // Tenta preencher automaticamente via Open Food Facts
+      await preencherViaOpenFoodFacts(codigo);
+    } else {
+      // Pergunta se quer criar, e se sim vai buscar dados ao OFF
       irPara('produtos');
       abrirCriarProduto(codigo);
+      await preencherViaOpenFoodFacts(codigo);
     }
   }
+}
+
+// =====================================================
+//  OPEN FOOD FACTS — preenche dados do produto
+// =====================================================
+async function preencherViaOpenFoodFacts(codigo) {
+  mostrarToast('🔍 A pesquisar produto...', '');
+  try {
+    const r = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${codigo}.json?fields=product_name,brands,categories_tags,quantity,image_small_url`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    const dados = await r.json();
+
+    if (dados.status !== 1 || !dados.product) {
+      mostrarToast('Produto não encontrado online', '');
+      return;
+    }
+
+    const p = dados.product;
+
+    // Nome: tenta português primeiro, depois genérico
+    const nome = p.product_name_pt || p.product_name || '';
+    const marca = p.brands ? p.brands.split(',')[0].trim() : '';
+
+    // Categoria: tenta mapear a primeira categoria do OFF para as nossas
+    const catOFF = (p.categories_tags || []).join(' ').toLowerCase();
+    const { catId, subId } = mapearCategoriaOFF(catOFF);
+
+    if (!nome) {
+      mostrarToast('Produto encontrado mas sem nome', '');
+      return;
+    }
+
+    // Preenche o formulário de novo produto
+    const campoNome = document.getElementById('np-nome');
+    const campoMarca = document.getElementById('np-marca');
+    const campoCat = document.getElementById('np-cat');
+    const campoSub = document.getElementById('np-subcat');
+
+    if (campoNome) campoNome.value = nome;
+    if (campoMarca && marca) campoMarca.value = marca;
+
+    // Preenche categoria se conseguiu mapear
+    if (catId && campoCat) {
+      campoCat.value = catId;
+      carregarSubcatsNovoProd();
+      if (subId) {
+        setTimeout(() => {
+          if (campoSub) campoSub.value = subId;
+        }, 150);
+      }
+    }
+
+    mostrarToast(`✅ "${nome}" encontrado no Open Food Facts!`, 'success');
+
+  } catch (e) {
+    // Timeout ou sem internet — falha silenciosa
+    console.log('Open Food Facts indisponível:', e.message);
+  }
+}
+
+// Mapeia categorias do Open Food Facts para as nossas categorias
+function mapearCategoriaOFF(tags) {
+  // Tenta encontrar correspondência nas nossas categorias e subcategorias
+  const mapa = [
+    // [palavras-chave OFF, id_categoria, id_subcategoria]
+    { keys: ['pasta','esparguete','macarrao','fusilli','penne'],       cat:'CAT001', sub:'SUB001' },
+    { keys: ['rice','arroz'],                                          cat:'CAT001', sub:'SUB002' },
+    { keys: ['conserva','canned','tuna','atum','sardinha','peixe-em'], cat:'CAT001', sub:'SUB003' },
+    { keys: ['sauce','molho','ketchup','caldo'],                       cat:'CAT001', sub:'SUB004' },
+    { keys: ['snack','chips','crisp','batata-frita'],                  cat:'CAT001', sub:'SUB005' },
+    { keys: ['biscuit','bolacha','cookie','cracker'],                  cat:'CAT001', sub:'SUB006' },
+    { keys: ['cereal','muesli','granola','porridge'],                  cat:'CAT001', sub:'SUB007' },
+    { keys: ['water','agua','aguas'],                                  cat:'CAT002', sub:'SUB008' },
+    { keys: ['juice','sumo','nect'],                                   cat:'CAT002', sub:'SUB009' },
+    { keys: ['soda','cola','refriger','drink','bebida'],               cat:'CAT002', sub:'SUB010' },
+    { keys: ['wine','vinho','beer','cerveja'],                         cat:'CAT002', sub:'SUB011' },
+    { keys: ['toothpast','dent','oral'],                               cat:'CAT003', sub:'SUB012' },
+    { keys: ['soap','shower','gel-de-banho','sabonete'],               cat:'CAT003', sub:'SUB013' },
+    { keys: ['shampoo','hair','cabelo'],                               cat:'CAT003', sub:'SUB014' },
+    { keys: ['detergent','laundry','roupa'],                          cat:'CAT004', sub:'SUB015' },
+    { keys: ['cleaning','limpeza','clean'],                            cat:'CAT004', sub:'SUB016' },
+    { keys: ['dish','loica','washing-up'],                             cat:'CAT004', sub:'SUB017' },
+    { keys: ['frozen','congelad'],                                     cat:'CAT005', sub:'SUB018' },
+    { keys: ['milk','leite','lacte'],                                  cat:'CAT006', sub:'SUB022' },
+    { keys: ['yogurt','iogurte'],                                      cat:'CAT006', sub:'SUB023' },
+    { keys: ['cheese','queijo'],                                       cat:'CAT006', sub:'SUB024' },
+  ];
+
+  for (const m of mapa) {
+    if (m.keys.some(k => tags.includes(k))) {
+      return { catId: m.cat, subId: m.sub };
+    }
+  }
+
+  // Categoria genérica: Mercearia sem subcategoria
+  if (tags.includes('food') || tags.includes('aliment')) {
+    return { catId: 'CAT001', subId: '' };
+  }
+
+  return { catId: '', subId: '' };
 }
 
 function inserirCodigoManual() {
