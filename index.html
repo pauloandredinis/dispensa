@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>Dispensa Casa</title>
+<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+<style>
+  /* ===================== RESET & BASE ===================== */
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0f0f1a;
+    --bg2:#1a1a2e;
+    --bg3:#16213e;
+    --card:#1e2140;
+    --card2:#252847;
+    --border:#2d3160;
+    --accent:#6c63ff;
+    --accent2:#a78bfa;
+    --accent3:#38bdf8;
+    --green:#34d399;
+    --red:#f87171;
+    --orange:#fb923c;
+    --yellow:#fbbf24;
+    --text:#e2e8f0;
+    --text2:#94a3b8;
+    --text3:#64748b;
+    --radius:16px;
+    --radius-sm:10px;
+    --shadow:0 4px 24px rgba(0,0,0,0.4);
+    --font:'DM Sans',system-ui,sans-serif;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;overflow:hidden}
+
+  /* ===================== LAYOUT ===================== */
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+  /* ===================== HEADER ===================== */
+  #header{
+    background:var(--bg2);
+    padding:env(safe-area-inset-top,16px) 20px 16px;
+    padding-top:calc(env(safe-area-inset-top,0px) + 16px);
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--border);
+    position:relative;z-index:10;
+  }
+  #header-title{font-size:20px;font-weight:700;letter-spacing:-0.5px}
+  #header-title span{color:var(--accent2)}
+  #header-right{display:flex;gap:10px;align-items:center}
+  #alertas-badge{
+    background:var(--red);color:#fff;
+    font-size:11px;font-weight:700;
+    width:20px;height:20px;border-radius:50%;
+    display:none;align-items:center;justify-content:center;
+  }
+  .icon-btn{
+    width:38px;height:38px;border-radius:12px;border:1px solid var(--border);
+    background:var(--card);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:18px;transition:all .15s;
+  }
+  .icon-btn:active{transform:scale(0.92);background:var(--card2)}
+
+  /* ===================== CONTEÚDO PRINCIPAL ===================== */
+  #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:100px}
+
+  /* ===================== PÁGINAS ===================== */
+  .page{display:none;animation:fadeIn .2s ease}
+  .page.active{display:block}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ===================== NAV BAR ===================== */
+  #navbar{
+    position:fixed;bottom:0;left:0;right:0;
+    background:var(--bg2);
+    border-top:1px solid var(--border);
+    display:flex;
+    padding-bottom:env(safe-area-inset-bottom,8px);
+    z-index:100;
+  }
+  .nav-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    padding:10px 0 6px;cursor:pointer;transition:all .15s;
+    font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.3px;
+    text-transform:uppercase;
+  }
+  .nav-item .nav-icon{font-size:22px;margin-bottom:3px;transition:transform .2s}
+  .nav-item.active{color:var(--accent2)}
+  .nav-item.active .nav-icon{transform:scale(1.15)}
+  .nav-item:active{opacity:0.7}
+
+  /* ===================== SECÇÃO TÍTULO ===================== */
+  .section-header{padding:20px 20px 12px;display:flex;align-items:center;justify-content:space-between}
+  .section-title{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+  .section-sub{font-size:13px;color:var(--text2);margin-top:2px}
+
+  /* ===================== CARDS ===================== */
+  .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);margin:0 16px 12px;
+    overflow:hidden;
+  }
+  .card-header{
+    padding:14px 16px;display:flex;align-items:center;gap:12px;
+    border-bottom:1px solid var(--border);
+  }
+  .card-body{padding:14px 16px}
+
+  /* ===================== ARMAZÉNS GRID ===================== */
+  .armazens-grid{
+    display:grid;grid-template-columns:1fr 1fr;
+    gap:12px;padding:0 16px 12px;
+  }
+  .armazem-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px 14px;
+    cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+  }
+  .armazem-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:3px;
+    background:var(--armazem-cor,var(--accent));
+  }
+  .armazem-card:active{transform:scale(0.97)}
+  .armazem-icon{font-size:28px;margin-bottom:8px;display:block}
+  .armazem-nome{font-size:14px;font-weight:700;margin-bottom:2px}
+  .armazem-qtd{font-size:12px;color:var(--text2)}
+  .armazem-card.selected{border-color:var(--accent);background:rgba(108,99,255,0.1)}
+
+  /* ===================== PRODUTO ITEM ===================== */
+  .produto-item{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+    cursor:pointer;transition:background .15s;
+  }
+  .produto-item:last-child{border-bottom:none}
+  .produto-item:active{background:var(--card2)}
+  .produto-icon{
+    width:42px;height:42px;border-radius:12px;
+    background:var(--card2);display:flex;align-items:center;
+    justify-content:center;font-size:20px;flex-shrink:0;
+  }
+  .produto-info{flex:1;min-width:0}
+  .produto-nome{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .produto-sub{font-size:12px;color:var(--text2);margin-top:1px}
+  .produto-qtd{font-size:16px;font-weight:800;color:var(--accent2)}
+  .produto-qtd.baixo{color:var(--red)}
+  .produto-qtd.zero{color:var(--text3)}
+
+  /* ===================== BADGES / TAGS ===================== */
+  .badge{
+    display:inline-flex;align-items:center;padding:3px 10px;
+    border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;
+  }
+  .badge-ok{background:rgba(52,211,153,0.15);color:var(--green)}
+  .badge-proximo{background:rgba(251,191,36,0.15);color:var(--yellow)}
+  .badge-expirado{background:rgba(248,113,113,0.15);color:var(--red)}
+  .badge-entrada{background:rgba(52,211,153,0.15);color:var(--green)}
+  .badge-saida{background:rgba(248,113,113,0.15);color:var(--red)}
+
+  /* ===================== FORMULÁRIOS ===================== */
+  .form-group{margin-bottom:14px}
+  .form-label{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block}
+  .form-control{
+    width:100%;background:var(--bg3);border:1px solid var(--border);
+    border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);
+    font-size:15px;padding:12px 14px;outline:none;transition:border-color .15s;
+    appearance:none;-webkit-appearance:none;
+  }
+  .form-control:focus{border-color:var(--accent)}
+  .form-control::placeholder{color:var(--text3)}
+  select.form-control{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;
+  }
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* ===================== BOTÕES ===================== */
+  .btn{
+    width:100%;padding:14px;border-radius:var(--radius-sm);border:none;
+    font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;
+    transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn:active{transform:scale(0.98)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:active{background:#5a52d5}
+  .btn-success{background:var(--green);color:#0f2518}
+  .btn-success:active{background:#2bb37a}
+  .btn-danger{background:var(--red);color:#fff}
+  .btn-danger:active{background:#dc5050}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+  .btn-outline:active{background:var(--card2)}
+  .btn-sm{padding:8px 14px;font-size:13px;width:auto;border-radius:8px}
+
+  /* ===================== SCANNER ===================== */
+  #scanner-overlay{
+    position:fixed;inset:0;background:var(--bg);z-index:500;
+    display:none;flex-direction:column;
+  }
+  #scanner-overlay.active{display:flex}
+  #scanner-header{
+    padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 20px;
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--border);
+  }
+  #scanner-title{font-size:18px;font-weight:700}
+  #scanner-close{font-size:24px;cursor:pointer;padding:4px 8px;color:var(--text2)}
+
+  /* ===================== MODAL ===================== */
+  #modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  #modal-overlay.active{display:flex}
+  #modal{
+    background:var(--bg2);border-radius:24px 24px 0 0;
+    width:100%;max-height:92vh;overflow-y:auto;
+    padding:0 0 calc(env(safe-area-inset-bottom,0px) + 20px);
+    animation:slideUp .25s ease;
+  }
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  #modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0}
+  #modal-header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+  #modal-title{font-size:18px;font-weight:700}
+  #modal-close-btn{font-size:22px;cursor:pointer;color:var(--text2)}
+  #modal-body{padding:20px}
+
+  /* ===================== TOAST ===================== */
+  #toast{
+    position:fixed;top:calc(env(safe-area-inset-top,0px) + 70px);
+    left:50%;transform:translateX(-50%) translateY(-20px);
+    background:var(--card2);border:1px solid var(--border);
+    color:var(--text);padding:10px 20px;border-radius:24px;
+    font-size:14px;font-weight:600;
+    z-index:1000;opacity:0;transition:all .3s;pointer-events:none;
+    white-space:nowrap;max-width:90vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.success{border-color:var(--green);color:var(--green)}
+  #toast.error{border-color:var(--red);color:var(--red)}
+
+  /* ===================== LOADING ===================== */
+  #loading{
+    position:fixed;inset:0;background:var(--bg);z-index:900;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  }
+  .spinner{
+    width:44px;height:44px;border:3px solid var(--border);
+    border-top-color:var(--accent);border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loading-text{color:var(--text2);font-size:14px}
+
+  /* ===================== DASHBOARD ===================== */
+  .stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 16px 12px}
+  .stat-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:14px 12px;text-align:center;
+  }
+  .stat-num{font-size:26px;font-weight:800;line-height:1}
+  .stat-label{font-size:11px;color:var(--text2);margin-top:4px;font-weight:600}
+
+  .alerta-item{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+  }
+  .alerta-item:last-child{border-bottom:none}
+  .alerta-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+  .alerta-dot.red{background:var(--red)}
+  .alerta-dot.yellow{background:var(--yellow)}
+  .alerta-info{flex:1}
+  .alerta-nome{font-size:13px;font-weight:600}
+  .alerta-desc{font-size:12px;color:var(--text2);margin-top:2px}
+
+  /* ===================== MOVIMENTOS ===================== */
+  .mov-item{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+  }
+  .mov-item:last-child{border-bottom:none}
+  .mov-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  .mov-icon.entrada{background:rgba(52,211,153,0.15)}
+  .mov-icon.saida{background:rgba(248,113,113,0.15)}
+  .mov-info{flex:1;min-width:0}
+  .mov-nome{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mov-sub{font-size:11px;color:var(--text2);margin-top:2px}
+  .mov-qtd{font-size:15px;font-weight:800}
+  .mov-qtd.entrada{color:var(--green)}
+  .mov-qtd.saida{color:var(--red)}
+
+  /* ===================== PESQUISA ===================== */
+  .search-bar{margin:0 16px 12px;position:relative}
+  .search-bar input{
+    width:100%;background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);
+    font-size:15px;padding:11px 14px 11px 40px;outline:none;
+    transition:border-color .15s;
+  }
+  .search-bar input:focus{border-color:var(--accent)}
+  .search-bar::before{
+    content:'🔍';position:absolute;left:13px;top:50%;transform:translateY(-50%);
+    font-size:15px;pointer-events:none;
+  }
+
+  /* ===================== EMPTY STATE ===================== */
+  .empty-state{text-align:center;padding:48px 24px;color:var(--text3)}
+  .empty-state .empty-icon{font-size:48px;margin-bottom:12px}
+  .empty-state p{font-size:14px;line-height:1.6}
+
+  /* ===================== TABS ===================== */
+  .tabs{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    flex-shrink:0;padding:7px 16px;border-radius:20px;
+    border:1px solid var(--border);background:var(--card);
+    font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;
+    transition:all .15s;white-space:nowrap;
+  }
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* ===================== SEPARADOR ===================== */
+  .divider{height:1px;background:var(--border);margin:0 16px 12px}
+  .divider-label{
+    text-align:center;font-size:11px;font-weight:700;
+    color:var(--text3);text-transform:uppercase;letter-spacing:1px;
+    padding:8px 16px;
+  }
+
+  /* ===================== TIPO OPERAÇÃO ===================== */
+  .op-selector{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .op-btn{
+    padding:14px;border-radius:var(--radius-sm);border:2px solid var(--border);
+    background:var(--card);cursor:pointer;text-align:center;transition:all .2s;
+  }
+  .op-btn .op-icon{font-size:24px;display:block;margin-bottom:4px}
+  .op-btn .op-label{font-size:13px;font-weight:700}
+  .op-btn.entrada.selected{border-color:var(--green);background:rgba(52,211,153,0.1)}
+  .op-btn.saida.selected{border-color:var(--red);background:rgba(248,113,113,0.1)}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div style="font-size:42px;margin-bottom:8px">🏠</div>
+  <div class="spinner"></div>
+  <div id="loading-text">A carregar a dispensa...</div>
+</div>
+
+<div id="toast"></div>
+
+<!-- SCANNER OVERLAY -->
+<div id="scanner-overlay">
+  <div id="scanner-header">
+    <div id="scanner-title">📷 Ler código</div>
+    <div id="scanner-close" onclick="fecharScanner()">✕</div>
+  </div>
+
+  <!-- Vídeo em directo -->
+  <div id="scanner-video-wrap" style="position:relative;flex:1;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden">
+    <video id="scanner-video" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
+    <!-- Moldura de mira -->
+    <div style="position:absolute;pointer-events:none;width:260px;height:160px">
+      <!-- cantos -->
+      <div style="position:absolute;top:0;left:0;width:40px;height:40px;border-top:3px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:6px 0 0 0"></div>
+      <div style="position:absolute;top:0;right:0;width:40px;height:40px;border-top:3px solid var(--accent2);border-right:3px solid var(--accent2);border-radius:0 6px 0 0"></div>
+      <div style="position:absolute;bottom:0;left:0;width:40px;height:40px;border-bottom:3px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:0 0 0 6px"></div>
+      <div style="position:absolute;bottom:0;right:0;width:40px;height:40px;border-bottom:3px solid var(--accent2);border-right:3px solid var(--accent2);border-radius:0 0 6px 0"></div>
+      <!-- linha de scan animada -->
+      <div id="scan-line" style="position:absolute;left:8px;right:8px;height:2px;background:linear-gradient(90deg,transparent,var(--accent2),transparent);animation:scanline 1.8s ease-in-out infinite"></div>
+    </div>
+    <!-- Mensagem de estado -->
+    <div id="scanner-msg" style="position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:13px;color:rgba(255,255,255,0.7);padding:0 24px"></div>
+  </div>
+
+  <div style="padding:16px 20px calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;gap:10px">
+    <button onclick="inserirCodigoManual()" style="
+      flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);
+      padding:13px;border-radius:12px;font-size:14px;font-weight:600;
+      font-family:var(--font);cursor:pointer;
+    ">✏️ Inserir manualmente</button>
+    <button onclick="toggleFlash()" id="btn-flash" style="
+      width:48px;background:var(--card);color:var(--text);border:1px solid var(--border);
+      border-radius:12px;font-size:20px;cursor:pointer;display:none;
+    ">🔦</button>
+  </div>
+</div>
+
+<style>
+@keyframes scanline {
+  0%   { top: 10%; opacity: 1; }
+  50%  { top: 85%; opacity: 1; }
+  100% { top: 10%; opacity: 1; }
+}
+</style>
+
+<!-- MODAL SHEET -->
+<div id="modal-overlay" onclick="fecharModal(event)">
+  <div id="modal">
+    <div id="modal-handle"></div>
+    <div id="modal-header">
+      <div id="modal-title">Modal</div>
+      <div id="modal-close-btn" onclick="fecharModal()">✕</div>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="header">
+    <div>
+      <div id="header-title">🏠 <span>Dispensa</span></div>
+    </div>
+    <div id="header-right">
+      <div id="alertas-badge"></div>
+      <div class="icon-btn" onclick="abrirScanner('operacao')" title="Scanner">📷</div>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- PÁGINA: INÍCIO -->
+    <div class="page active" id="page-inicio">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Início</div>
+          <div class="section-sub" id="data-hoje"></div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-num" id="stat-produtos">–</div>
+          <div class="stat-label">Produtos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-armazens">–</div>
+          <div class="stat-label">Armazéns</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-alertas" style="color:var(--red)">–</div>
+          <div class="stat-label">Alertas</div>
+        </div>
+      </div>
+      <div class="card" id="card-alertas" style="display:none">
+        <div class="card-header">
+          <span style="font-size:20px">⚠️</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:15px">Alertas</div>
+            <div style="font-size:12px;color:var(--text2)" id="alertas-subtitle"></div>
+          </div>
+        </div>
+        <div id="alertas-lista"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size:20px">🕐</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:15px">Movimentos recentes</div>
+          </div>
+          <div style="font-size:12px;color:var(--accent2);cursor:pointer" onclick="irPara('movimentos')">Ver todos</div>
+        </div>
+        <div id="movimentos-recentes">
+          <div class="empty-state" style="padding:24px">
+            <div class="empty-icon">📦</div>
+            <p>Sem movimentos</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PÁGINA: ARMAZÉNS -->
+    <div class="page" id="page-armazens">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Armazéns</div>
+          <div class="section-sub">Selecciona para ver o stock</div>
+        </div>
+      </div>
+      <div class="armazens-grid" id="armazens-grid"></div>
+      <div id="stock-armazem" style="display:none">
+        <div class="divider-label" id="stock-armazem-titulo">Stock</div>
+        <div class="search-bar">
+          <input type="text" placeholder="Pesquisar produto..." id="pesq-stock" oninput="filtrarStockArmazem()">
+        </div>
+        <div class="card">
+          <div id="stock-lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PÁGINA: OPERAÇÃO -->
+    <div class="page" id="page-operacao">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Operação</div>
+          <div class="section-sub">Adicionar ou retirar produto</div>
+        </div>
+      </div>
+      <div style="padding:0 16px">
+        <div class="op-selector">
+          <div class="op-btn entrada selected" onclick="selecionarOp('entrada')">
+            <span class="op-icon">📥</span>
+            <span class="op-label">Adicionar</span>
+          </div>
+          <div class="op-btn saida" onclick="selecionarOp('saida')">
+            <span class="op-icon">📤</span>
+            <span class="op-label">Retirar</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Produto</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-control" id="op-barras" placeholder="Código de barras ou nome..." oninput="pesquisarProdutoOp()" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="abrirScanner('operacao')" style="flex-shrink:0;padding:0 14px">📷</button>
+          </div>
+        </div>
+        <div id="op-produto-info" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
+          <div style="font-weight:700;font-size:15px" id="op-produto-nome"></div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px" id="op-produto-cat"></div>
+        </div>
+        <div class="divider-label" style="padding:0;margin-bottom:10px;text-align:left;font-size:11px;color:var(--text3)">— OU SELECCIONAR POR CATEGORIA —</div>
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-control" id="op-cat" onchange="carregarSubcatsOp()">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sub-categoria</label>
+          <select class="form-control" id="op-subcat" onchange="carregarProdutosOp()" disabled>
+            <option value="">Seleccionar categoria primeiro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Produto</label>
+          <select class="form-control" id="op-produto-select" onchange="selecionarProdutoDropdown()" disabled>
+            <option value="">Seleccionar sub-categoria primeiro</option>
+          </select>
+        </div>
+        <div class="divider" style="margin:4px 0 14px"></div>
+        <div class="form-group">
+          <label class="form-label">Armazém</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-control" id="op-armazem" style="flex:1">
+              <option value="">Seleccionar...</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="abrirScanner('armazem')" style="flex-shrink:0;padding:0 14px" title="Ler QR armazém">📦</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantidade</label>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button onclick="ajustarQtd(-1)" style="width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
+            <input type="number" class="form-control" id="op-quantidade" value="1" min="1" style="text-align:center;font-size:20px;font-weight:700">
+            <button onclick="ajustarQtd(1)" style="width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+          </div>
+        </div>
+        <div id="op-datas" class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Data inserção</label>
+            <input type="date" class="form-control" id="op-data-insercao">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Data validade</label>
+            <input type="date" class="form-control" id="op-data-validade">
+          </div>
+        </div>
+        <div style="height:16px"></div>
+        <button class="btn btn-success" id="op-btn-confirmar" onclick="confirmarOperacao()">📥 Adicionar ao stock</button>
+        <div style="height:8px"></div>
+        <button class="btn btn-outline" onclick="limparFormularioOp()">🔄 Limpar</button>
+        <div style="height:20px"></div>
+      </div>
+    </div>
+
+    <!-- PÁGINA: PRODUTOS -->
+    <div class="page" id="page-produtos">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Produtos</div>
+          <div class="section-sub">Catálogo completo</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="abrirCriarProduto()">+ Novo</button>
+      </div>
+      <div class="search-bar">
+        <input type="text" placeholder="Pesquisar produto ou marca..." id="pesq-produtos" oninput="filtrarProdutos()">
+      </div>
+      <div class="tabs" id="tabs-categorias">
+        <div class="tab active" onclick="filtrarCategoriaProd('')" data-cat="">Todos</div>
+      </div>
+      <div class="card">
+        <div id="produtos-lista"></div>
+      </div>
+    </div>
+
+    <!-- PÁGINA: MOVIMENTOS -->
+    <div class="page" id="page-movimentos">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Movimentos</div>
+          <div class="section-sub">Histórico de entradas e saídas</div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="movimentos-lista"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NAV BAR -->
+  <div id="navbar">
+    <div class="nav-item active" onclick="irPara('inicio')" data-page="inicio">
+      <div class="nav-icon">🏠</div>Início
+    </div>
+    <div class="nav-item" onclick="irPara('armazens')" data-page="armazens">
+      <div class="nav-icon">🗄️</div>Armazéns
+    </div>
+    <div class="nav-item" onclick="irPara('operacao')" data-page="operacao">
+      <div class="nav-icon">📦</div>Operação
+    </div>
+    <div class="nav-item" onclick="irPara('produtos')" data-page="produtos">
+      <div class="nav-icon">📋</div>Produtos
+    </div>
+    <div class="nav-item" onclick="irPara('movimentos')" data-page="movimentos">
+      <div class="nav-icon">🕐</div>Histórico
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================
+//  CONFIGURAÇÃO
+// =====================================================
+const API_URL = 'https://script.google.com/macros/s/AKfycbyOx1a-BSQm6aalGToQ6gtHexjcRZhjv34PCUULatEOCcyQ8xUNFRFVvcskO5go0Avanw/exec';
+
+// =====================================================
+//  ESTADO GLOBAL
+// =====================================================
+const estado = {
+  categorias: [],
+  armazens: [],
+  produtos: [],
+  stock: [],
+  movimentos: [],
+  alertas: { validade: [], stock_minimo: [] },
+  armazem_selecionado: null,
+  op_tipo: 'entrada',
+  op_produto: null,
+  scanner_modo: null,
+  cat_filtro: '',
+};
+
+// =====================================================
+//  API
+// =====================================================
+async function api(acao, params = {}) {
+  const url = new URL(API_URL);
+  url.searchParams.set('acao', acao);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  try {
+    const r = await fetch(url, { method: 'GET', redirect: 'follow' });
+    return await r.json();
+  } catch (e) {
+    console.error('API erro:', e);
+    return { sucesso: false, erro: e.message };
+  }
+}
+
+async function apiPost(acao, dados = {}) {
+  try {
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ acao, ...dados })
+    });
+    return await r.json();
+  } catch (e) {
+    // Fallback para GET
+    return api(acao, dados);
+  }
+}
+
+// =====================================================
+//  INICIALIZAÇÃO
+// =====================================================
+async function init() {
+  const hoje = new Date();
+  document.getElementById('data-hoje').textContent =
+    hoje.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dataHoje = hoje.toISOString().split('T')[0];
+  document.getElementById('op-data-insercao').value = dataHoje;
+
+  try {
+    const [rCats, rArm, rProd, rStock, rMov, rAlertas] = await Promise.all([
+      api('getCategorias'),
+      api('getArmazens'),
+      api('getProdutos'),
+      api('getStock'),
+      api('getMovimentos', { limite: 20 }),
+      api('getAlertas'),
+    ]);
+    if (rCats.sucesso) estado.categorias = rCats.categorias;
+    if (rArm.sucesso) estado.armazens = rArm.armazens;
+    if (rProd.sucesso) estado.produtos = rProd.produtos;
+    if (rStock.sucesso) estado.stock = rStock.stock;
+    if (rMov.sucesso) estado.movimentos = rMov.movimentos;
+    if (rAlertas.sucesso) estado.alertas = rAlertas;
+    renderTudo();
+  } catch (e) {
+    mostrarToast('Erro ao carregar dados', 'error');
+  }
+  document.getElementById('loading').style.display = 'none';
+}
+
+function renderTudo() {
+  renderStats();
+  renderAlertas();
+  renderArmazens();
+  renderProdutos();
+  renderMovimentos();
+  renderMovimentosRecentes();
+  preencherDropdownsOp();
+}
+
+// =====================================================
+//  NAVEGAÇÃO
+// =====================================================
+function irPara(pagina) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pagina).classList.add('active');
+  document.querySelector(`[data-page="${pagina}"]`)?.classList.add('active');
+  document.getElementById('content').scrollTop = 0;
+}
+
+// =====================================================
+//  STATS
+// =====================================================
+function renderStats() {
+  document.getElementById('stat-produtos').textContent = estado.produtos.length;
+  document.getElementById('stat-armazens').textContent = estado.armazens.length;
+  const total = (estado.alertas.validade?.length || 0) + (estado.alertas.stock_minimo?.length || 0);
+  document.getElementById('stat-alertas').textContent = total;
+  const badge = document.getElementById('alertas-badge');
+  if (total > 0) { badge.textContent = total > 9 ? '9+' : total; badge.style.display = 'flex'; }
+  else badge.style.display = 'none';
+}
+
+// =====================================================
+//  ALERTAS
+// =====================================================
+function renderAlertas() {
+  const { validade, stock_minimo } = estado.alertas;
+  const todos = [...(validade || []), ...(stock_minimo || [])];
+  const card = document.getElementById('card-alertas');
+  if (todos.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('alertas-subtitle').textContent = todos.length + ' alerta(s) activo(s)';
+  document.getElementById('alertas-lista').innerHTML = todos.map(a => {
+    let cor = 'yellow', desc = '';
+    if (a.tipo === 'expirado') { cor = 'red'; desc = `Expirado há ${Math.abs(a.dias_restantes)} dias`; }
+    else if (a.tipo === 'proximo') { desc = `Expira em ${a.dias_restantes} dias — ${a.nome_armazem}`; }
+    else { desc = `Stock: ${a.quantidade_atual} / mínimo: ${a.quantidade_minima}`; cor = 'red'; }
+    return `<div class="alerta-item">
+      <div class="alerta-dot ${cor}"></div>
+      <div class="alerta-info">
+        <div class="alerta-nome">${a.nome_produto}</div>
+        <div class="alerta-desc">${desc}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// =====================================================
+//  ARMAZÉNS
+// =====================================================
+function renderArmazens() {
+  document.getElementById('armazens-grid').innerHTML = estado.armazens.map(a => {
+    const qtd = estado.stock.filter(s => s.id_armazem === a.id).reduce((sum, s) => sum + Number(s.quantidade), 0);
+    return `<div class="armazem-card" style="--armazem-cor:${a.cor}" onclick="selecionarArmazem('${a.id}', this)">
+      <span class="armazem-icon">${a.icone}</span>
+      <div class="armazem-nome">${a.nome}</div>
+      <div class="armazem-qtd">${qtd} iten(s)</div>
+    </div>`;
+  }).join('');
+}
+
+function selecionarArmazem(id, el) {
+  estado.armazem_selecionado = id;
+  document.querySelectorAll('.armazem-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const armazem = estado.armazens.find(a => a.id === id);
+  document.getElementById('stock-armazem-titulo').textContent = `${armazem?.icone || '📦'} ${armazem?.nome || 'Armazém'}`;
+  document.getElementById('stock-armazem').style.display = 'block';
+  renderStockArmazem(id);
+  setTimeout(() => document.getElementById('stock-armazem').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+}
+
+function renderStockArmazem(id) {
+  const stock = estado.stock.filter(s => s.id_armazem === id);
+  const lista = document.getElementById('stock-lista');
+  if (stock.length === 0) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Nenhum produto neste armazém</p></div>`;
+    return;
+  }
+  lista.innerHTML = stock.map(s => {
+    const classQtd = s.quantidade === 0 ? 'zero' : s.quantidade <= 1 ? 'baixo' : '';
+    const classeVal = s.estado_validade === 'expirado' ? 'badge-expirado' : s.estado_validade === 'proximo' ? 'badge-proximo' : '';
+    return `<div class="produto-item" onclick="abrirDetalheProduto('${s.id_produto}')">
+      <div class="produto-icon">${getCategoriaIcon(s.id_produto)}</div>
+      <div class="produto-info">
+        <div class="produto-nome">${s.nome_produto}</div>
+        <div class="produto-sub">${s.data_validade ? '📅 ' + s.data_validade : 'Sem validade'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="produto-qtd ${classQtd}">${s.quantidade}</div>
+        ${classeVal ? `<div class="badge ${classeVal}" style="font-size:10px;margin-top:3px">${s.estado_validade === 'expirado' ? 'Expirado' : 'A expirar'}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrarStockArmazem() {
+  const termo = document.getElementById('pesq-stock').value.toLowerCase();
+  const id = estado.armazem_selecionado;
+  const stock = estado.stock.filter(s => s.id_armazem === id && s.nome_produto.toLowerCase().includes(termo));
+  const lista = document.getElementById('stock-lista');
+  if (stock.length === 0) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum resultado</p></div>`;
+    return;
+  }
+  lista.innerHTML = stock.map(s => {
+    const classQtd = s.quantidade === 0 ? 'zero' : s.quantidade <= 1 ? 'baixo' : '';
+    return `<div class="produto-item">
+      <div class="produto-icon">${getCategoriaIcon(s.id_produto)}</div>
+      <div class="produto-info">
+        <div class="produto-nome">${s.nome_produto}</div>
+        <div class="produto-sub">${s.data_validade ? '📅 ' + s.data_validade : 'Sem validade'}</div>
+      </div>
+      <div class="produto-qtd ${classQtd}">${s.quantidade}</div>
+    </div>`;
+  }).join('');
+}
+
+// =====================================================
+//  PRODUTOS
+// =====================================================
+function renderProdutos() {
+  document.getElementById('tabs-categorias').innerHTML =
+    '<div class="tab active" onclick="filtrarCategoriaProd(\'\')" data-cat="">Todos</div>' +
+    estado.categorias.map(c => `<div class="tab" onclick="filtrarCategoriaProd('${c.id}')" data-cat="${c.id}">${c.nome}</div>`).join('');
+  filtrarCategoriaProd('');
+}
+
+function filtrarCategoriaProd(catId) {
+  estado.cat_filtro = catId;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.cat === catId));
+  filtrarProdutos();
+}
+
+function filtrarProdutos() {
+  const termo = document.getElementById('pesq-produtos').value.toLowerCase();
+  let produtos = estado.produtos;
+  if (estado.cat_filtro) produtos = produtos.filter(p => p.id_categoria === estado.cat_filtro);
+  if (termo) produtos = produtos.filter(p => p.nome.toLowerCase().includes(termo) || (p.marca || '').toLowerCase().includes(termo));
+  const lista = document.getElementById('produtos-lista');
+  if (produtos.length === 0) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum produto encontrado</p></div>`;
+    return;
+  }
+  lista.innerHTML = produtos.map(p => {
+    const stockTotal = estado.stock.filter(s => s.id_produto === p.id).reduce((sum, s) => sum + Number(s.quantidade), 0);
+    const classQtd = stockTotal === 0 ? 'zero' : stockTotal < p.quantidade_minima ? 'baixo' : '';
+    return `<div class="produto-item" onclick="abrirDetalheProduto('${p.id}')">
+      <div class="produto-icon">${getCategoriaIcon(p.id)}</div>
+      <div class="produto-info">
+        <div class="produto-nome">${p.nome}</div>
+        <div class="produto-sub">${p.marca || ''} · ${p.subcategoria}</div>
+      </div>
+      <div class="produto-qtd ${classQtd}">${stockTotal}</div>
+    </div>`;
+  }).join('');
+}
+
+// =====================================================
+//  MOVIMENTOS
+// =====================================================
+function renderMovimentos() {
+  const lista = document.getElementById('movimentos-lista');
+  if (estado.movimentos.length === 0) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sem movimentos registados</p></div>`;
+    return;
+  }
+  lista.innerHTML = estado.movimentos.map(m => {
+    const e = m.tipo === 'Entrada';
+    return `<div class="mov-item">
+      <div class="mov-icon ${e ? 'entrada' : 'saida'}">${e ? '📥' : '📤'}</div>
+      <div class="mov-info">
+        <div class="mov-nome">${m.nome_produto}</div>
+        <div class="mov-sub">${m.nome_armazem} · ${m.data_hora}</div>
+      </div>
+      <div class="mov-qtd ${e ? 'entrada' : 'saida'}">${e ? '+' : '-'}${m.quantidade}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderMovimentosRecentes() {
+  const lista = document.getElementById('movimentos-recentes');
+  const recentes = estado.movimentos.slice(0, 5);
+  if (recentes.length === 0) {
+    lista.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:32px">📦</div><p>Sem movimentos</p></div>`;
+    return;
+  }
+  lista.innerHTML = recentes.map(m => {
+    const e = m.tipo === 'Entrada';
+    return `<div class="mov-item">
+      <div class="mov-icon ${e ? 'entrada' : 'saida'}">${e ? '📥' : '📤'}</div>
+      <div class="mov-info">
+        <div class="mov-nome">${m.nome_produto}</div>
+        <div class="mov-sub">${m.nome_armazem} · ${m.data_hora}</div>
+      </div>
+      <div class="mov-qtd ${e ? 'entrada' : 'saida'}">${e ? '+' : '-'}${m.quantidade}</div>
+    </div>`;
+  }).join('');
+}
+
+// =====================================================
+//  OPERAÇÃO
+// =====================================================
+function selecionarOp(tipo) {
+  estado.op_tipo = tipo;
+  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.op-btn.${tipo}`).classList.add('selected');
+  const btn = document.getElementById('op-btn-confirmar');
+  const datas = document.getElementById('op-datas');
+  if (tipo === 'entrada') {
+    btn.textContent = '📥 Adicionar ao stock';
+    btn.className = 'btn btn-success';
+    datas.style.display = 'grid';
+  } else {
+    btn.textContent = '📤 Retirar do stock';
+    btn.className = 'btn btn-danger';
+    datas.style.display = 'none';
+  }
+}
+
+function preencherDropdownsOp() {
+  document.getElementById('op-cat').innerHTML = '<option value="">Seleccionar...</option>' +
+    estado.categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  document.getElementById('op-armazem').innerHTML = '<option value="">Seleccionar...</option>' +
+    estado.armazens.map(a => `<option value="${a.id}">${a.icone} ${a.nome}</option>`).join('');
+}
+
+function carregarSubcatsOp() {
+  const catId = document.getElementById('op-cat').value;
+  const selSub = document.getElementById('op-subcat');
+  const selProd = document.getElementById('op-produto-select');
+  selProd.innerHTML = '<option value="">Seleccionar sub-categoria primeiro</option>';
+  selProd.disabled = true;
+  if (!catId) { selSub.innerHTML = '<option value="">Seleccionar categoria primeiro</option>'; selSub.disabled = true; return; }
+  const cat = estado.categorias.find(c => c.id === catId);
+  selSub.innerHTML = '<option value="">Seleccionar...</option>' +
+    (cat?.subcategorias || []).map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
+  selSub.disabled = false;
+  estado.op_produto = null;
+  document.getElementById('op-produto-info').style.display = 'none';
+}
+
+function carregarProdutosOp() {
+  const subId = document.getElementById('op-subcat').value;
+  const selProd = document.getElementById('op-produto-select');
+  if (!subId) { selProd.innerHTML = '<option value="">Seleccionar sub-categoria primeiro</option>'; selProd.disabled = true; return; }
+  const produtos = estado.produtos.filter(p => p.id_subcategoria === subId);
+  selProd.innerHTML = '<option value="">Seleccionar produto...</option>' +
+    produtos.map(p => `<option value="${p.id}">${p.nome}${p.marca ? ' — ' + p.marca : ''}</option>`).join('');
+  selProd.disabled = false;
+}
+
+function selecionarProdutoDropdown() {
+  const id = document.getElementById('op-produto-select').value;
+  if (!id) { estado.op_produto = null; document.getElementById('op-produto-info').style.display = 'none'; return; }
+  const p = estado.produtos.find(x => x.id === id);
+  if (p) mostrarProdutoOp(p);
+}
+
+function mostrarProdutoOp(p) {
+  estado.op_produto = p;
+  document.getElementById('op-produto-nome').textContent = p.nome + (p.marca ? ' — ' + p.marca : '');
+  document.getElementById('op-produto-cat').textContent = p.categoria + ' › ' + p.subcategoria;
+  document.getElementById('op-produto-info').style.display = 'block';
+  document.getElementById('op-barras').value = '';
+}
+
+async function pesquisarProdutoOp() {
+  const val = document.getElementById('op-barras').value.trim();
+  if (val.length < 2) return;
+  const porBarras = estado.produtos.find(p => String(p.codigo_barras) === val);
+  if (porBarras) { mostrarProdutoOp(porBarras); return; }
+  const porNome = estado.produtos.filter(p => p.nome.toLowerCase().includes(val.toLowerCase()));
+  if (porNome.length === 1) { mostrarProdutoOp(porNome[0]); return; }
+  if (porNome.length > 1) mostrarSugestoesProduto(porNome);
+}
+
+function mostrarSugestoesProduto(produtos) {
+  abrirModal('Seleccionar produto', produtos.map(p =>
+    `<div class="produto-item" onclick="selecionarSugestao('${p.id}')">
+      <div class="produto-icon">${getCategoriaIcon(p.id)}</div>
+      <div class="produto-info">
+        <div class="produto-nome">${p.nome}</div>
+        <div class="produto-sub">${p.marca || ''} · ${p.subcategoria}</div>
+      </div>
+    </div>`
+  ).join(''));
+}
+
+function selecionarSugestao(id) {
+  const p = estado.produtos.find(x => x.id === id);
+  if (p) { mostrarProdutoOp(p); fecharModal(); }
+}
+
+function ajustarQtd(delta) {
+  const input = document.getElementById('op-quantidade');
+  input.value = Math.max(1, parseInt(input.value || 1) + delta);
+}
+
+async function confirmarOperacao() {
+  if (!estado.op_produto) { mostrarToast('Selecciona um produto primeiro', 'error'); return; }
+  const armId = document.getElementById('op-armazem').value;
+  if (!armId) { mostrarToast('Selecciona um armazém', 'error'); return; }
+  const qtd = parseInt(document.getElementById('op-quantidade').value);
+  if (!qtd || qtd < 1) { mostrarToast('Quantidade inválida', 'error'); return; }
+
+  const btn = document.getElementById('op-btn-confirmar');
+  btn.disabled = true;
+  btn.textContent = '⏳ A processar...';
+
+  let resultado;
+  if (estado.op_tipo === 'entrada') {
+    resultado = await apiPost('adicionarStock', {
+      id_produto: estado.op_produto.id,
+      id_armazem: armId,
+      quantidade: qtd,
+      data_insercao: document.getElementById('op-data-insercao').value,
+      data_validade: document.getElementById('op-data-validade').value,
+    });
+  } else {
+    resultado = await apiPost('retirarStock', {
+      id_produto: estado.op_produto.id,
+      id_armazem: armId,
+      quantidade: qtd,
+    });
+  }
+
+  btn.disabled = false;
+  selecionarOp(estado.op_tipo);
+
+  if (resultado.sucesso) {
+    mostrarToast('✅ ' + resultado.mensagem, 'success');
+    limparFormularioOp();
+    const [rStock, rMov, rAlertas] = await Promise.all([
+      api('getStock'), api('getMovimentos', { limite: 20 }), api('getAlertas')
+    ]);
+    if (rStock.sucesso) estado.stock = rStock.stock;
+    if (rMov.sucesso) estado.movimentos = rMov.movimentos;
+    if (rAlertas.sucesso) estado.alertas = rAlertas;
+    renderStats(); renderAlertas(); renderMovimentosRecentes(); renderMovimentos();
+    if (estado.armazem_selecionado) renderStockArmazem(estado.armazem_selecionado);
+  } else {
+    mostrarToast('❌ ' + (resultado.erro || 'Erro ao processar'), 'error');
+  }
+}
+
+function limparFormularioOp() {
+  estado.op_produto = null;
+  document.getElementById('op-barras').value = '';
+  document.getElementById('op-produto-info').style.display = 'none';
+  document.getElementById('op-cat').value = '';
+  document.getElementById('op-subcat').innerHTML = '<option value="">Seleccionar categoria primeiro</option>';
+  document.getElementById('op-subcat').disabled = true;
+  document.getElementById('op-produto-select').innerHTML = '<option value="">Seleccionar sub-categoria primeiro</option>';
+  document.getElementById('op-produto-select').disabled = true;
+  document.getElementById('op-armazem').value = '';
+  document.getElementById('op-quantidade').value = '1';
+  document.getElementById('op-data-validade').value = '';
+  document.getElementById('op-data-insercao').value = new Date().toISOString().split('T')[0];
+}
+
+// =====================================================
+//  CRIAR PRODUTO
+// =====================================================
+function abrirCriarProduto(codigoBarras = '') {
+  const html = `
+    <div class="form-group">
+      <label class="form-label">Nome do produto *</label>
+      <input type="text" class="form-control" id="np-nome" placeholder="Ex: Esparguete 1Kg">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Marca</label>
+      <input type="text" class="form-control" id="np-marca" placeholder="Ex: Pingo Doce">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Código de barras</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="form-control" id="np-barras" placeholder="EAN13..." value="${codigoBarras}" style="flex:1">
+        <button class="btn btn-outline btn-sm" onclick="abrirScanner('novo-produto')" style="flex-shrink:0;padding:0 12px">📷</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria *</label>
+      <select class="form-control" id="np-cat" onchange="carregarSubcatsNovoProd()">
+        <option value="">Seleccionar...</option>
+        ${estado.categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+        <option value="__nova__">+ Nova categoria</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sub-categoria *</label>
+      <select class="form-control" id="np-subcat" disabled>
+        <option value="">Seleccionar categoria primeiro</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Unidade</label>
+        <select class="form-control" id="np-unidade">
+          <option>Un</option><option>Kg</option><option>L</option><option>g</option><option>ml</option><option>Cx</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Stock mínimo</label>
+        <input type="number" class="form-control" id="np-minimo" value="1" min="0">
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn btn-primary" onclick="guardarNovoProduto()">💾 Guardar produto</button>
+  `;
+  abrirModal('Novo produto', html);
+}
+
+function carregarSubcatsNovoProd() {
+  const catId = document.getElementById('np-cat').value;
+  const selSub = document.getElementById('np-subcat');
+  if (catId === '__nova__') { selSub.innerHTML = '<option value="">Aguarda nova categoria</option>'; selSub.disabled = true; pedirNovaCategoria(); return; }
+  if (!catId) { selSub.innerHTML = '<option>Seleccionar categoria primeiro</option>'; selSub.disabled = true; return; }
+  const cat = estado.categorias.find(c => c.id === catId);
+  selSub.innerHTML = '<option value="">Seleccionar...</option>' +
+    (cat?.subcategorias || []).map(s => `<option value="${s.id}">${s.nome}</option>`).join('') +
+    '<option value="__nova__">+ Nova sub-categoria</option>';
+  selSub.disabled = false;
+}
+
+async function guardarNovoProduto() {
+  const nome = document.getElementById('np-nome').value.trim();
+  const catId = document.getElementById('np-cat').value;
+  const subId = document.getElementById('np-subcat').value;
+  if (!nome) { mostrarToast('Nome obrigatório', 'error'); return; }
+  if (!catId || catId === '__nova__') { mostrarToast('Selecciona uma categoria', 'error'); return; }
+  if (!subId || subId === '__nova__') { mostrarToast('Selecciona uma sub-categoria', 'error'); return; }
+  const resultado = await apiPost('criarProduto', {
+    nome, marca: document.getElementById('np-marca').value.trim(),
+    codigo_barras: document.getElementById('np-barras').value.trim(),
+    id_categoria: catId, id_subcategoria: subId,
+    unidade: document.getElementById('np-unidade').value,
+    quantidade_minima: document.getElementById('np-minimo').value,
+  });
+  if (resultado.sucesso) {
+    mostrarToast('✅ Produto criado!', 'success');
+    fecharModal();
+    const r = await api('getProdutos');
+    if (r.sucesso) { estado.produtos = r.produtos; renderProdutos(); renderStats(); }
+  } else {
+    mostrarToast('❌ ' + resultado.erro, 'error');
+  }
+}
+
+// =====================================================
+//  DETALHE DO PRODUTO
+// =====================================================
+function abrirDetalheProduto(id) {
+  const p = estado.produtos.find(x => x.id === id);
+  if (!p) return;
+  const stockProd = estado.stock.filter(s => s.id_produto === id);
+  const stockTotal = stockProd.reduce((sum, s) => sum + Number(s.quantidade), 0);
+  const stockHtml = stockProd.length === 0
+    ? '<div class="empty-state" style="padding:16px"><p>Sem stock registado</p></div>'
+    : stockProd.map(s => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${s.nome_armazem}</div>
+          <div style="font-size:12px;color:var(--text2)">${s.data_validade ? 'Val: ' + s.data_validade : 'Sem validade'}</div>
+        </div>
+        <div style="font-size:18px;font-weight:800;color:var(--accent2)">${s.quantidade}</div>
+      </div>`).join('');
+  abrirModal(p.nome, `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="font-size:36px">${getCategoriaIcon(id)}</div>
+      <div>
+        <div style="font-size:18px;font-weight:800">${p.nome}</div>
+        <div style="font-size:13px;color:var(--text2)">${p.marca || ''}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">${p.categoria} › ${p.subcategoria}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <div style="flex:1;background:var(--card);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800;color:${stockTotal < p.quantidade_minima ? 'var(--red)' : 'var(--green)'}">${stockTotal}</div>
+        <div style="font-size:11px;color:var(--text2)">Total stock</div>
+      </div>
+      <div style="flex:1;background:var(--card);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800">${p.quantidade_minima}</div>
+        <div style="font-size:11px;color:var(--text2)">Mínimo</div>
+      </div>
+    </div>
+    ${p.codigo_barras ? `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">🔢 ${p.codigo_barras}</div>` : ''}
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Stock por armazém</div>
+    ${stockHtml}
+    <div style="height:16px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn btn-success" onclick="acaoRapida('entrada','${id}')">📥 Adicionar</button>
+      <button class="btn btn-danger" onclick="acaoRapida('saida','${id}')">📤 Retirar</button>
+    </div>
+  `);
+}
+
+function acaoRapida(tipo, id) {
+  fecharModal();
+  const p = estado.produtos.find(x => x.id === id);
+  if (!p) return;
+  irPara('operacao');
+  selecionarOp(tipo);
+  mostrarProdutoOp(p);
+  document.getElementById('op-cat').value = p.id_categoria;
+  carregarSubcatsOp();
+  setTimeout(() => {
+    document.getElementById('op-subcat').value = p.id_subcategoria;
+    carregarProdutosOp();
+    setTimeout(() => { document.getElementById('op-produto-select').value = p.id; }, 100);
+  }, 100);
+}
+
+// =====================================================
+//  SCANNER — ZXing (lê EAN13, QR, e todos os formatos)
+// =====================================================
+let zxingReader = null;
+let flashLigado = false;
+let streamAtivo = null;
+
+async function abrirScanner(modo) {
+  estado.scanner_modo = modo;
+  document.getElementById('scanner-overlay').classList.add('active');
+  document.getElementById('scanner-msg').textContent = 'A iniciar câmara...';
+  flashLigado = false;
+
+  try {
+    // Pede câmara traseira directamente
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    streamAtivo = stream;
+
+    const video = document.getElementById('scanner-video');
+    video.srcObject = stream;
+    await video.play();
+
+    // Mostra botão de flash se disponível
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities?.() || {};
+    document.getElementById('btn-flash').style.display = caps.torch ? 'flex' : 'none';
+
+    // Inicia leitura contínua com ZXing
+    const hints = new Map();
+    const formats = [
+      ZXingBrowser.BarcodeFormat.EAN_13,
+      ZXingBrowser.BarcodeFormat.EAN_8,
+      ZXingBrowser.BarcodeFormat.CODE_128,
+      ZXingBrowser.BarcodeFormat.CODE_39,
+      ZXingBrowser.BarcodeFormat.QR_CODE,
+      ZXingBrowser.BarcodeFormat.UPC_A,
+      ZXingBrowser.BarcodeFormat.UPC_E,
+      ZXingBrowser.BarcodeFormat.DATA_MATRIX,
+    ];
+    hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXingBrowser.DecodeHintType.TRY_HARDER, true);
+
+    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
+
+    document.getElementById('scanner-msg').textContent = 'Aponta para o código de barras';
+
+    zxingReader.decodeFromVideoElement(video, (result, err) => {
+      if (result) {
+        const codigo = result.getText();
+        // Feedback visual
+        document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
+        setTimeout(() => {
+          fecharScanner();
+          onScanSuccess(codigo);
+        }, 400);
+      }
+      // erros de leitura são normais (frame sem código) — ignora
+    });
+
+  } catch (err) {
+    console.error('Câmara erro:', err);
+    document.getElementById('scanner-msg').textContent = '❌ Sem acesso à câmara';
+    // Fallback: inserção manual
+    setTimeout(() => {
+      fecharScanner();
+      inserirCodigoManual();
+    }, 1500);
+  }
+}
+
+function fecharScanner() {
+  // Para o ZXing
+  if (zxingReader) {
+    try { zxingReader.reset(); } catch(e) {}
+    zxingReader = null;
+  }
+  // Para o stream de vídeo
+  if (streamAtivo) {
+    streamAtivo.getTracks().forEach(t => t.stop());
+    streamAtivo = null;
+  }
+  const video = document.getElementById('scanner-video');
+  video.srcObject = null;
+  document.getElementById('scanner-overlay').classList.remove('active');
+  flashLigado = false;
+}
+
+async function toggleFlash() {
+  if (!streamAtivo) return;
+  const track = streamAtivo.getVideoTracks()[0];
+  flashLigado = !flashLigado;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: flashLigado }] });
+    document.getElementById('btn-flash').style.opacity = flashLigado ? '1' : '0.5';
+  } catch(e) {}
+}
+
+async function onScanSuccess(codigo) {
+  const modo = estado.scanner_modo;
+  if (modo === 'armazem') {
+    const armazem = estado.armazens.find(a => a.id === codigo);
+    if (armazem) {
+      document.getElementById('op-armazem').value = armazem.id;
+      mostrarToast('📦 ' + armazem.nome + ' seleccionado!', 'success');
+    } else {
+      mostrarToast('QR inválido: ' + codigo, 'error');
+    }
+    return;
+  }
+  const resultado = await api('getProdutoPorBarras', { codigo });
+  if (resultado.encontrado) {
+    if (modo === 'novo-produto') {
+      document.getElementById('np-barras').value = codigo;
+      mostrarToast('Código lido: ' + codigo, 'success');
+    } else {
+      irPara('operacao');
+      mostrarProdutoOp(resultado.produto);
+      mostrarToast('✅ ' + resultado.produto.nome, 'success');
+    }
+  } else {
+    if (modo === 'novo-produto') {
+      document.getElementById('np-barras').value = codigo;
+      mostrarToast('Código registado: ' + codigo, 'success');
+    } else if (confirm('Produto não encontrado. Criar agora?')) {
+      irPara('produtos');
+      abrirCriarProduto(codigo);
+    }
+  }
+}
+
+function inserirCodigoManual() {
+  fecharScanner();
+  const codigo = prompt('Inserir código de barras:');
+  if (codigo && codigo.trim()) onScanSuccess(codigo.trim());
+}
+
+// =====================================================
+//  MODAL
+// =====================================================
+function abrirModal(titulo, html) {
+  document.getElementById('modal-title').textContent = titulo;
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function fecharModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+
+// =====================================================
+//  TOAST
+// =====================================================
+let toastTimer;
+function mostrarToast(msg, tipo = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + tipo;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3000);
+}
+
+// =====================================================
+//  UTILITÁRIOS
+// =====================================================
+function getCategoriaIcon(id_produto) {
+  const p = estado.produtos.find(x => x.id === id_produto);
+  if (!p) return '📦';
+  const icons = { 'CAT001':'🌾','CAT002':'🧃','CAT003':'🧴','CAT004':'🧹','CAT005':'❄️','CAT006':'🥛','CAT007':'💊','CAT008':'🐾' };
+  return icons[p.id_categoria] || '📦';
+}
+
+async function pedirNovaCategoria() {
+  const nome = prompt('Nome da nova categoria:');
+  if (!nome) return;
+  const nomeSub = prompt('Nome da primeira sub-categoria:');
+  if (!nomeSub) return;
+  const r = await apiPost('criarCategoria', { nome_categoria: nome, nome_subcategoria: nomeSub });
+  if (r.sucesso) {
+    mostrarToast('✅ Categoria criada!', 'success');
+    const rCats = await api('getCategorias');
+    if (rCats.sucesso) estado.categorias = rCats.categorias;
+    fecharModal();
+    setTimeout(() => abrirCriarProduto(), 300);
+  }
+}
+
+// =====================================================
+//  ARRANQUE
+// =====================================================
+init();
+</script>
+</body>
+</html>
