@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1a1a2e">
 <title>Dispensa Casa</title>
-<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
 <style>
   /* ===================== RESET & BASE ===================== */
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -357,9 +357,9 @@
     <div id="scanner-close" onclick="fecharScanner()">✕</div>
   </div>
 
-  <!-- Vídeo em directo -->
+  <!-- Vídeo em directo — Quagga injeta aqui -->
   <div id="scanner-video-wrap" style="position:relative;flex:1;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden">
-    <video id="scanner-video" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
+    <div id="scanner-video" style="width:100%;height:100%"></div>
     <!-- Moldura de mira -->
     <div style="position:absolute;pointer-events:none;width:260px;height:160px">
       <!-- cantos -->
@@ -392,6 +392,17 @@
   0%   { top: 10%; opacity: 1; }
   50%  { top: 85%; opacity: 1; }
   100% { top: 10%; opacity: 1; }
+}
+/* Quagga injeta video e canvas aqui */
+#scanner-video video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  position: absolute !important;
+  top: 0; left: 0;
+}
+#scanner-video canvas {
+  display: none;
 }
 </style>
 
@@ -1242,9 +1253,9 @@ function acaoRapida(tipo, id) {
 }
 
 // =====================================================
-//  SCANNER — ZXing (lê EAN13, QR, e todos os formatos)
+//  SCANNER — Quagga2 (EAN13, EAN8, Code128, QR, etc.)
 // =====================================================
-let zxingReader = null;
+let scannerAtivo = false;
 let flashLigado = false;
 let streamAtivo = null;
 
@@ -1253,79 +1264,90 @@ async function abrirScanner(modo) {
   document.getElementById('scanner-overlay').classList.add('active');
   document.getElementById('scanner-msg').textContent = 'A iniciar câmara...';
   flashLigado = false;
+  scannerAtivo = false;
 
-  try {
-    // Pede câmara traseira directamente
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    streamAtivo = stream;
+  // Verifica se Quagga carregou
+  if (typeof Quagga === 'undefined') {
+    document.getElementById('scanner-msg').textContent = '❌ Biblioteca não carregou';
+    setTimeout(() => { fecharScanner(); inserirCodigoManual(); }, 1500);
+    return;
+  }
 
-    const video = document.getElementById('scanner-video');
-    video.srcObject = stream;
-    await video.play();
+  Quagga.init({
+    inputStream: {
+      name: 'Live',
+      type: 'LiveStream',
+      target: document.getElementById('scanner-video'),
+      constraints: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    decoder: {
+      readers: [
+        'ean_reader',       // EAN-13 (supermercado)
+        'ean_8_reader',     // EAN-8
+        'code_128_reader',  // Code 128
+        'code_39_reader',   // Code 39
+        'upc_reader',       // UPC-A
+        'upc_e_reader',     // UPC-E
+      ],
+      multiple: false,
+    },
+    locate: true,
+    frequency: 10,
+  }, (err) => {
+    if (err) {
+      console.error('Quagga init erro:', err);
+      document.getElementById('scanner-msg').textContent = '❌ Sem acesso à câmara';
+      setTimeout(() => { fecharScanner(); inserirCodigoManual(); }, 1500);
+      return;
+    }
 
-    // Mostra botão de flash se disponível
-    const track = stream.getVideoTracks()[0];
-    const caps = track.getCapabilities?.() || {};
-    document.getElementById('btn-flash').style.display = caps.torch ? 'flex' : 'none';
-
-    // Inicia leitura contínua com ZXing
-    const hints = new Map();
-    const formats = [
-      ZXingBrowser.BarcodeFormat.EAN_13,
-      ZXingBrowser.BarcodeFormat.EAN_8,
-      ZXingBrowser.BarcodeFormat.CODE_128,
-      ZXingBrowser.BarcodeFormat.CODE_39,
-      ZXingBrowser.BarcodeFormat.QR_CODE,
-      ZXingBrowser.BarcodeFormat.UPC_A,
-      ZXingBrowser.BarcodeFormat.UPC_E,
-      ZXingBrowser.BarcodeFormat.DATA_MATRIX,
-    ];
-    hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(ZXingBrowser.DecodeHintType.TRY_HARDER, true);
-
-    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
-
+    Quagga.start();
+    scannerAtivo = true;
     document.getElementById('scanner-msg').textContent = 'Aponta para o código de barras';
 
-    zxingReader.decodeFromVideoElement(video, (result, err) => {
-      if (result) {
-        const codigo = result.getText();
-        // Feedback visual
-        document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
-        setTimeout(() => {
-          fecharScanner();
-          onScanSuccess(codigo);
-        }, 400);
-      }
-      // erros de leitura são normais (frame sem código) — ignora
-    });
+    // Tenta mostrar botão de flash
+    const video = document.querySelector('#scanner-video video');
+    if (video && video.srcObject) {
+      streamAtivo = video.srcObject;
+      const track = streamAtivo.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+      document.getElementById('btn-flash').style.display = caps.torch ? 'flex' : 'none';
+    }
+  });
 
-  } catch (err) {
-    console.error('Câmara erro:', err);
-    document.getElementById('scanner-msg').textContent = '❌ Sem acesso à câmara';
-    // Fallback: inserção manual
+  // Callback quando lê um código
+  Quagga.onDetected((data) => {
+    if (!scannerAtivo) return;
+    const codigo = data.codeResult.code;
+    if (!codigo) return;
+
+    // Evita leituras duplas
+    scannerAtivo = false;
+
+    // Feedback visual
+    document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
+
     setTimeout(() => {
       fecharScanner();
-      inserirCodigoManual();
-    }, 1500);
-  }
+      onScanSuccess(codigo);
+    }, 400);
+  });
 }
 
 function fecharScanner() {
-  // Para o ZXing
-  if (zxingReader) {
-    try { zxingReader.reset(); } catch(e) {}
-    zxingReader = null;
+  scannerAtivo = false;
+  if (typeof Quagga !== 'undefined') {
+    try { Quagga.stop(); } catch(e) {}
+    try { Quagga.offDetected(); } catch(e) {}
   }
-  // Para o stream de vídeo
   if (streamAtivo) {
     streamAtivo.getTracks().forEach(t => t.stop());
     streamAtivo = null;
   }
-  const video = document.getElementById('scanner-video');
-  video.srcObject = null;
   document.getElementById('scanner-overlay').classList.remove('active');
   flashLigado = false;
 }
