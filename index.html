@@ -571,11 +571,11 @@
         <div id="op-datas" class="form-row">
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label">Data inserção</label>
-            <input type="date" class="form-control" id="op-data-insercao">
+            <input type="text" class="form-control" id="op-data-insercao" placeholder="dd/mm/aaaa">
           </div>
           <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Data validade</label>
-            <input type="date" class="form-control" id="op-data-validade">
+            <label class="form-label">Validade (mm/aaaa)</label>
+            <input type="text" class="form-control" id="op-data-validade" placeholder="ex: 06/2027">
           </div>
         </div>
         <div style="height:16px"></div>
@@ -702,8 +702,10 @@ async function init() {
   const hoje = new Date();
   document.getElementById('data-hoje').textContent =
     hoje.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
-  const dataHoje = hoje.toISOString().split('T')[0];
-  document.getElementById('op-data-insercao').value = dataHoje;
+  const dd = String(hoje.getDate()).padStart(2,'0');
+  const mm = String(hoje.getMonth()+1).padStart(2,'0');
+  const aaaa = hoje.getFullYear();
+  document.getElementById('op-data-insercao').value = `${dd}/${mm}/${aaaa}`;
 
   try {
     const [rCats, rArm, rProd, rStock, rMov, rAlertas] = await Promise.all([
@@ -1009,7 +1011,7 @@ function mostrarProdutoOp(p) {
 async function pesquisarProdutoOp() {
   const val = document.getElementById('op-barras').value.trim();
   if (val.length < 2) return;
-  const porBarras = estado.produtos.find(p => String(p.codigo_barras) === val);
+  const porBarras = estado.produtos.find(p => String(p.codigo_barras).replace(/\D/g,'') === val.replace(/\D/g,''));
   if (porBarras) { mostrarProdutoOp(porBarras); return; }
   const porNome = estado.produtos.filter(p => p.nome.toLowerCase().includes(val.toLowerCase()));
   if (porNome.length === 1) { mostrarProdutoOp(porNome[0]); return; }
@@ -1097,7 +1099,8 @@ function limparFormularioOp() {
   document.getElementById('op-armazem').value = '';
   document.getElementById('op-quantidade').value = '1';
   document.getElementById('op-data-validade').value = '';
-  document.getElementById('op-data-insercao').value = new Date().toISOString().split('T')[0];
+  const h = new Date(); 
+  document.getElementById('op-data-insercao').value = `${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')}/${h.getFullYear()}`;
 }
 
 // =====================================================
@@ -1162,6 +1165,36 @@ function carregarSubcatsNovoProd() {
     (cat?.subcategorias || []).map(s => `<option value="${s.id}">${s.nome}</option>`).join('') +
     '<option value="__nova__">+ Nova sub-categoria</option>';
   selSub.disabled = false;
+  // Listener para detectar selecção de nova sub-categoria
+  selSub.onchange = function() {
+    if (this.value === '__nova__') pedirNovaSubcategoria(catId);
+  };
+}
+
+async function pedirNovaSubcategoria(catId) {
+  const nome = prompt('Nome da nova sub-categoria:');
+  if (!nome || !nome.trim()) {
+    document.getElementById('np-subcat').value = '';
+    return;
+  }
+  const r = await apiPost('criarCategoria', {
+    id_categoria: catId,
+    nome_subcategoria: nome.trim()
+  });
+  if (r.sucesso) {
+    mostrarToast('✅ Sub-categoria criada!', 'success');
+    // Recarrega categorias
+    const rCats = await api('getCategorias');
+    if (rCats.sucesso) estado.categorias = rCats.categorias;
+    // Recarrega o select de subcategorias e selecciona a nova
+    carregarSubcatsNovoProd();
+    setTimeout(() => {
+      document.getElementById('np-subcat').value = r.id_subcategoria;
+    }, 100);
+  } else {
+    mostrarToast('❌ Erro ao criar sub-categoria', 'error');
+    document.getElementById('np-subcat').value = '';
+  }
 }
 
 async function guardarNovoProduto() {
