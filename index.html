@@ -439,6 +439,7 @@
           <div class="section-title">Início</div>
           <div class="section-sub" id="data-hoje"></div>
         </div>
+        <button class="icon-btn" onclick="atualizarTudo()" title="Atualizar">🔄</button>
       </div>
       <div class="stat-row">
         <div class="stat-card">
@@ -488,6 +489,7 @@
           <div class="section-title">Armazéns</div>
           <div class="section-sub">Selecciona para ver o stock</div>
         </div>
+        <button class="icon-btn" onclick="atualizarTudo()" title="Atualizar">🔄</button>
       </div>
       <div class="armazens-grid" id="armazens-grid"></div>
       <div id="stock-armazem" style="display:none">
@@ -508,6 +510,7 @@
           <div class="section-title">Operação</div>
           <div class="section-sub">Adicionar ou retirar produto</div>
         </div>
+        <button class="icon-btn" onclick="atualizarTudo()" title="Atualizar">🔄</button>
       </div>
       <div style="padding:0 16px">
         <div class="op-selector">
@@ -574,8 +577,8 @@
             <input type="text" class="form-control" id="op-data-insercao" placeholder="dd/mm/aaaa">
           </div>
           <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Validade (mm/aaaa)</label>
-            <input type="text" class="form-control" id="op-data-validade" placeholder="ex: 06/2027">
+            <label class="form-label">Validade (dd/mm/aaaa)</label>
+            <input type="text" class="form-control" id="op-data-validade" placeholder="ex: 31/12/2027">
           </div>
         </div>
         <div style="height:16px"></div>
@@ -593,7 +596,10 @@
           <div class="section-title">Produtos</div>
           <div class="section-sub">Catálogo completo</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="abrirCriarProduto()">+ Novo</button>
+        <div style="display:flex;gap:8px">
+          <button class="icon-btn" onclick="atualizarTudo()" title="Atualizar">🔄</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirCriarProduto()">+ Novo</button>
+        </div>
       </div>
       <div class="search-bar">
         <input type="text" placeholder="Pesquisar produto ou marca..." id="pesq-produtos" oninput="filtrarProdutos()">
@@ -613,6 +619,7 @@
           <div class="section-title">Movimentos</div>
           <div class="section-sub">Histórico de entradas e saídas</div>
         </div>
+        <button class="icon-btn" onclick="atualizarTudo()" title="Atualizar">🔄</button>
       </div>
       <div class="card">
         <div id="movimentos-lista"></div>
@@ -1291,6 +1298,7 @@ function acaoRapida(tipo, id) {
 let scannerAtivo = false;
 let flashLigado = false;
 let streamAtivo = null;
+let leiturasPendentes = {};  // Para validar código lido 2x antes de aceitar
 
 async function abrirScanner(modo) {
   estado.scanner_modo = modo;
@@ -1298,8 +1306,8 @@ async function abrirScanner(modo) {
   document.getElementById('scanner-msg').textContent = 'A iniciar câmara...';
   flashLigado = false;
   scannerAtivo = false;
+  leiturasPendentes = {};
 
-  // Verifica se Quagga carregou
   if (typeof Quagga === 'undefined') {
     document.getElementById('scanner-msg').textContent = '❌ Biblioteca não carregou';
     setTimeout(() => { fecharScanner(); inserirCodigoManual(); }, 1500);
@@ -1313,23 +1321,32 @@ async function abrirScanner(modo) {
       target: document.getElementById('scanner-video'),
       constraints: {
         facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+      area: {
+        // Área de detecção alargada para apanhar códigos em latas
+        top: '10%', right: '5%', left: '5%', bottom: '10%'
       },
     },
     decoder: {
       readers: [
-        'ean_reader',       // EAN-13 (supermercado)
-        'ean_8_reader',     // EAN-8
-        'code_128_reader',  // Code 128
-        'code_39_reader',   // Code 39
-        'upc_reader',       // UPC-A
-        'upc_e_reader',     // UPC-E
+        { format: 'ean_reader', config: {} },
+        { format: 'ean_8_reader', config: {} },
+        { format: 'code_128_reader', config: {} },
+        { format: 'upc_reader', config: {} },
+        { format: 'upc_e_reader', config: {} },
+        { format: 'code_39_reader', config: {} },
       ],
       multiple: false,
     },
+    locator: {
+      patchSize: 'large',      // 'small'|'medium'|'large' — large melhor para latas
+      halfSample: false,       // false = mais preciso, mais lento
+    },
     locate: true,
-    frequency: 10,
+    frequency: 15,             // frames por segundo analisados
+    numOfWorkers: 2,
   }, (err) => {
     if (err) {
       console.error('Quagga init erro:', err);
@@ -1340,26 +1357,38 @@ async function abrirScanner(modo) {
 
     Quagga.start();
     scannerAtivo = true;
-    document.getElementById('scanner-msg').textContent = 'Aponta para o código de barras';
+    document.getElementById('scanner-msg').textContent = 'Aponta para o código — mantém estável';
 
-    // Tenta mostrar botão de flash
-    const video = document.querySelector('#scanner-video video');
-    if (video && video.srcObject) {
-      streamAtivo = video.srcObject;
-      const track = streamAtivo.getVideoTracks()[0];
-      const caps = track.getCapabilities?.() || {};
-      document.getElementById('btn-flash').style.display = caps.torch ? 'flex' : 'none';
-    }
+    // Flash
+    setTimeout(() => {
+      const video = document.querySelector('#scanner-video video');
+      if (video && video.srcObject) {
+        streamAtivo = video.srcObject;
+        const track = streamAtivo.getVideoTracks()[0];
+        const caps = track.getCapabilities?.() || {};
+        document.getElementById('btn-flash').style.display = caps.torch ? 'flex' : 'none';
+      }
+    }, 1000);
   });
 
-  // Callback quando lê um código
+  // Valida código lido pelo menos 2 vezes seguidas antes de aceitar
+  // Evita leituras erradas em superfícies curvas
   Quagga.onDetected((data) => {
     if (!scannerAtivo) return;
     const codigo = data.codeResult.code;
-    if (!codigo) return;
+    if (!codigo || codigo.length < 4) return;
 
-    // Evita leituras duplas
-    scannerAtivo = false;
+    // Conta quantas vezes este código foi lido
+    leiturasPendentes[codigo] = (leiturasPendentes[codigo] || 0) + 1;
+
+    if (leiturasPendentes[codigo] >= 2) {
+      scannerAtivo = false;
+      document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
+      setTimeout(() => { fecharScanner(); onScanSuccess(codigo); }, 400);
+    } else {
+      document.getElementById('scanner-msg').textContent = '🔍 A confirmar leitura...';
+    }
+  });
 
     // Feedback visual
     document.getElementById('scanner-msg').textContent = '✅ ' + codigo;
@@ -1373,6 +1402,7 @@ async function abrirScanner(modo) {
 
 function fecharScanner() {
   scannerAtivo = false;
+  leiturasPendentes = {};
   if (typeof Quagga !== 'undefined') {
     try { Quagga.stop(); } catch(e) {}
     try { Quagga.offDetected(); } catch(e) {}
@@ -1482,6 +1512,35 @@ async function pedirNovaCategoria() {
     if (rCats.sucesso) estado.categorias = rCats.categorias;
     fecharModal();
     setTimeout(() => abrirCriarProduto(), 300);
+  }
+}
+
+// =====================================================
+//  ATUALIZAR TUDO
+// =====================================================
+async function atualizarTudo() {
+  mostrarToast('🔄 A atualizar...', '');
+  try {
+    const [rCats, rArm, rProd, rStock, rMov, rAlertas] = await Promise.all([
+      api('getCategorias'),
+      api('getArmazens'),
+      api('getProdutos'),
+      api('getStock'),
+      api('getMovimentos', { limite: 20 }),
+      api('getAlertas'),
+    ]);
+    if (rCats.sucesso) estado.categorias = rCats.categorias;
+    if (rArm.sucesso) estado.armazens = rArm.armazens;
+    if (rProd.sucesso) estado.produtos = rProd.produtos;
+    if (rStock.sucesso) estado.stock = rStock.stock;
+    if (rMov.sucesso) estado.movimentos = rMov.movimentos;
+    if (rAlertas.sucesso) estado.alertas = rAlertas;
+    renderTudo();
+    // Recarrega armazém seleccionado se estiver aberto
+    if (estado.armazem_selecionado) renderStockArmazem(estado.armazem_selecionado);
+    mostrarToast('✅ Dados atualizados!', 'success');
+  } catch(e) {
+    mostrarToast('❌ Erro ao atualizar', 'error');
   }
 }
 
