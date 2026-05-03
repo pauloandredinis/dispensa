@@ -1054,44 +1054,113 @@ async function confirmarOperacao() {
   const qtd = parseInt(document.getElementById('op-quantidade').value);
   if (!qtd || qtd < 1) { mostrarToast('Quantidade inválida', 'error'); return; }
 
+  // Para SAÍDA: se há mais de uma linha de stock, pergunta qual retirar
+  if (estado.op_tipo === 'saida') {
+    const linhas = estado.stock.filter(s =>
+      s.id_produto === estado.op_produto.id &&
+      s.id_armazem === armId &&
+      Number(s.quantidade) > 0
+    );
+
+    if (linhas.length > 1) {
+      // Mostra modal para escolher a validade/lote a retirar
+      await escolherLinhaParaRetirar(linhas, qtd, armId);
+      return;
+    } else if (linhas.length === 0) {
+      mostrarToast('❌ Sem stock deste produto neste armazém', 'error');
+      return;
+    }
+    // Só 1 linha — passa o id_stock directamente
+    await executarRetirada(estado.op_produto.id, armId, qtd, linhas[0].id);
+    return;
+  }
+
+  // ENTRADA — fluxo normal
   const btn = document.getElementById('op-btn-confirmar');
   btn.disabled = true;
   btn.textContent = '⏳ A processar...';
 
-  let resultado;
-  if (estado.op_tipo === 'entrada') {
-    resultado = await apiPost('adicionarStock', {
-      id_produto: estado.op_produto.id,
-      id_armazem: armId,
-      quantidade: qtd,
-      data_insercao: document.getElementById('op-data-insercao').value,
-      data_validade: document.getElementById('op-data-validade').value,
-    });
-  } else {
-    resultado = await apiPost('retirarStock', {
-      id_produto: estado.op_produto.id,
-      id_armazem: armId,
-      quantidade: qtd,
-    });
-  }
+  const resultado = await apiPost('adicionarStock', {
+    id_produto: estado.op_produto.id,
+    id_armazem: armId,
+    quantidade: qtd,
+    data_insercao: document.getElementById('op-data-insercao').value,
+    data_validade: document.getElementById('op-data-validade').value,
+  });
 
   btn.disabled = false;
-  selecionarOp(estado.op_tipo);
+  selecionarOp('entrada');
 
   if (resultado.sucesso) {
     mostrarToast('✅ ' + resultado.mensagem, 'success');
     limparFormularioOp();
-    const [rStock, rMov, rAlertas] = await Promise.all([
-      api('getStock'), api('getMovimentos', { limite: 20 }), api('getAlertas')
-    ]);
-    if (rStock.sucesso) estado.stock = rStock.stock;
-    if (rMov.sucesso) estado.movimentos = rMov.movimentos;
-    if (rAlertas.sucesso) estado.alertas = rAlertas;
-    renderStats(); renderAlertas(); renderMovimentosRecentes(); renderMovimentos();
-    if (estado.armazem_selecionado) renderStockArmazem(estado.armazem_selecionado);
+    await recarregarDados();
   } else {
     mostrarToast('❌ ' + (resultado.erro || 'Erro ao processar'), 'error');
   }
+}
+
+// Mostra modal para escolher qual linha de stock retirar
+async function escolherLinhaParaRetirar(linhas, qtd, armId) {
+  const itensHtml = linhas.map(l => `
+    <div class="produto-item" onclick="confirmarLinhaEscolhida('${l.id}', ${qtd}, '${armId}')">
+      <div class="produto-icon">📦</div>
+      <div class="produto-info">
+        <div class="produto-nome">${l.data_validade ? 'Val: ' + l.data_validade : 'Sem validade'}</div>
+        <div class="produto-sub">Inserido: ${l.data_insercao} · Stock: ${l.quantidade}</div>
+      </div>
+      <div style="color:var(--accent2);font-size:13px;font-weight:700">Retirar</div>
+    </div>
+  `).join('');
+
+  abrirModal('Qual validade retirar?',
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">
+      Este produto tem ${linhas.length} lotes diferentes. Escolhe qual retirar:
+    </div>
+    ${itensHtml}
+    <div style="height:8px"></div>
+    <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`
+  );
+}
+
+async function confirmarLinhaEscolhida(idStock, qtd, armId) {
+  fecharModal();
+  await executarRetirada(estado.op_produto.id, armId, qtd, idStock);
+}
+
+async function executarRetirada(idProduto, armId, qtd, idStock) {
+  const btn = document.getElementById('op-btn-confirmar');
+  btn.disabled = true;
+  btn.textContent = '⏳ A processar...';
+
+  const resultado = await apiPost('retirarStock', {
+    id_produto: idProduto,
+    id_armazem: armId,
+    quantidade: qtd,
+    id_stock: idStock,  // linha específica a retirar
+  });
+
+  btn.disabled = false;
+  selecionarOp('saida');
+
+  if (resultado.sucesso) {
+    mostrarToast('✅ ' + resultado.mensagem, 'success');
+    limparFormularioOp();
+    await recarregarDados();
+  } else {
+    mostrarToast('❌ ' + (resultado.erro || 'Erro ao processar'), 'error');
+  }
+}
+
+async function recarregarDados() {
+  const [rStock, rMov, rAlertas] = await Promise.all([
+    api('getStock'), api('getMovimentos', { limite: 20 }), api('getAlertas')
+  ]);
+  if (rStock.sucesso) estado.stock = rStock.stock;
+  if (rMov.sucesso) estado.movimentos = rMov.movimentos;
+  if (rAlertas.sucesso) estado.alertas = rAlertas;
+  renderStats(); renderAlertas(); renderMovimentosRecentes(); renderMovimentos();
+  if (estado.armazem_selecionado) renderStockArmazem(estado.armazem_selecionado);
 }
 
 function limparFormularioOp() {
