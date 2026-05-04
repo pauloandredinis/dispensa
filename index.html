@@ -5,9 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dispensa">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <title>Dispensa Casa</title>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(r => console.log('SW registado:', r.scope))
+        .catch(e => console.log('SW erro:', e));
+    });
+  }
+</script>
 <style>
   /* ===================== RESET & BASE ===================== */
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1012,13 +1027,23 @@ function mostrarProdutoOp(p) {
   document.getElementById('op-produto-nome').textContent = p.nome + (p.marca ? ' — ' + p.marca : '');
   document.getElementById('op-produto-cat').textContent = p.categoria + ' › ' + p.subcategoria;
   document.getElementById('op-produto-info').style.display = 'block';
-  document.getElementById('op-barras').value = '';
+  // Remove oninput temporariamente para não disparar pesquisa ao limpar
+  const campo = document.getElementById('op-barras');
+  campo.oninput = null;
+  campo.value = '';
+  setTimeout(() => { campo.oninput = pesquisarProdutoOp; }, 100);
 }
 
 async function pesquisarProdutoOp() {
   const val = document.getElementById('op-barras').value.trim();
+  // Se campo vazio e já há produto seleccionado via dropdown, não faz nada
   if (val.length < 2) return;
-  const porBarras = estado.produtos.find(p => String(p.codigo_barras).replace(/\D/g,'') === val.replace(/\D/g,''));
+  // Se já há produto seleccionado e o campo foi limpo pelo sistema, não interfere
+  if (val === '' && estado.op_produto) return;
+  const porBarras = estado.produtos.find(p => {
+    const cb = String(p.codigo_barras).replace(/\D/g,'');
+    return cb && cb.length > 3 && cb === val.replace(/\D/g,'');
+  });
   if (porBarras) { mostrarProdutoOp(porBarras); return; }
   const porNome = estado.produtos.filter(p => p.nome.toLowerCase().includes(val.toLowerCase()));
   if (porNome.length === 1) { mostrarProdutoOp(porNome[0]); return; }
